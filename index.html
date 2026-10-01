@@ -154,19 +154,56 @@
 
     .summary b { color: var(--text); }
 
-    .select-wrap {
-      display: none;
-      margin-top: 10px;
+    .conversion-row {
+      display: flex;
+      align-items: end;
+      gap: 14px;
     }
 
-    .select-wrap.show { display: block; }
+    .markdown-choice {
+      display: none;
+      flex: 1 1 460px;
+      padding: 14px;
+      border: 2px solid #f2b84b;
+      border-radius: 14px;
+      background: #fffaf0;
+    }
+
+    .markdown-choice.show {
+      display: block;
+    }
+
+    .markdown-choice label {
+      display: block;
+      margin-bottom: 7px;
+      color: #7a4b00;
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    .markdown-choice .choice-hint {
+      margin-bottom: 9px;
+      color: #8a5a0a;
+      font-size: 13px;
+      line-height: 1.4;
+    }
 
     #markdownSelect {
       width: 100%;
-      border: 1px solid var(--border);
+      border: 1px solid #d8a33b;
       background: #fff;
       color: var(--text);
       cursor: pointer;
+      font-weight: 650;
+    }
+
+    #markdownSelect:invalid {
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .convert-area {
+      flex: 0 0 auto;
     }
 
     .status {
@@ -213,6 +250,8 @@
 
     @media (max-width: 700px) {
       .choice-grid { grid-template-columns: 1fr; }
+      .conversion-row { flex-direction: column; align-items: stretch; }
+      .markdown-choice { flex-basis: auto; }
       #convertBtn { width: 100%; }
       .actions { flex-direction: column; }
       .file-label, .secondary-btn { width: 100%; }
@@ -246,11 +285,6 @@
               <label class="file-label" for="folderInput">Seleziona cartella</label>
               <input id="folderInput" type="file" webkitdirectory multiple>
             </div>
-
-            <div id="selectWrap" class="select-wrap">
-              <div style="margin-bottom: 6px; font-size: 13px; color: var(--muted);">Se nella cartella ci sono più file Markdown, scegli quale convertire:</div>
-              <select id="markdownSelect"></select>
-            </div>
           </div>
         </div>
 
@@ -258,7 +292,20 @@
           Nessun file selezionato.
         </div>
 
-        <button id="convertBtn" type="button" disabled>Converti in Word</button>
+        <div class="conversion-row">
+          <div id="selectWrap" class="markdown-choice" aria-live="polite">
+            <label for="markdownSelect">⚠ Seleziona il file da convertire</label>
+            <div class="choice-hint">Nella cartella ci sono più file Markdown. Scegli quello corretto prima di continuare.</div>
+            <select id="markdownSelect" required>
+              <option value="" selected disabled>— Seleziona il file Markdown —</option>
+            </select>
+          </div>
+
+          <div class="convert-area">
+            <button id="convertBtn" type="button" disabled>Converti in Word</button>
+          </div>
+        </div>
+
         <div id="status" class="status" role="status" aria-live="polite"></div>
 
         <div class="info">
@@ -361,12 +408,22 @@
       summary.innerHTML = html;
     }
 
+    function resetMarkdownSelect() {
+      markdownSelect.innerHTML = "";
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = "— Seleziona il file Markdown —";
+      placeholder.disabled = true;
+      placeholder.selected = true;
+      markdownSelect.appendChild(placeholder);
+    }
+
     function resetSelection() {
       singleMarkdownFile = null;
       folderFiles = [];
       markdownFiles = [];
       selectedMarkdownRelativePath = null;
-      markdownSelect.innerHTML = "";
+      resetMarkdownSelect();
       selectWrap.classList.remove("show");
       convertBtn.disabled = true;
     }
@@ -416,32 +473,50 @@
         markdownSelect.appendChild(opt);
       }
 
-      selectedMarkdownRelativePath = markdownFiles[0].relPath;
-      if (markdownFiles.length > 1) {
-        selectWrap.classList.add("show");
-      }
-
-      convertBtn.disabled = false;
-
       const rootFolder = files[0]?.webkitRelativePath?.split("/")[0] || "(cartella)";
-      setSummary(
-        `<b>Modalità selezionata:</b> cartella progetto<br>` +
-        `<b>Cartella:</b> ${escapeHtml(rootFolder)}<br>` +
-        `<b>File trovati:</b> ${files.length}<br>` +
-        `<b>Markdown trovati:</b> ${markdownFiles.length}<br>` +
-        `<b>Markdown selezionato:</b> ${escapeHtml(selectedMarkdownRelativePath)}`
-      );
+
+      if (markdownFiles.length === 1) {
+        // Un solo file Markdown: lo selezioniamo automaticamente.
+        selectedMarkdownRelativePath = markdownFiles[0].relPath;
+        markdownSelect.value = selectedMarkdownRelativePath;
+        selectWrap.classList.remove("show");
+        convertBtn.disabled = false;
+
+        setSummary(
+          `<b>Modalità selezionata:</b> cartella progetto<br>` +
+          `<b>Cartella:</b> ${escapeHtml(rootFolder)}<br>` +
+          `<b>File trovati:</b> ${files.length}<br>` +
+          `<b>Markdown trovato:</b> ${escapeHtml(selectedMarkdownRelativePath)}`
+        );
+      } else {
+        // Più file Markdown: nessuna scelta automatica.
+        // Il pulsante resta disabilitato finché l'utente non sceglie.
+        selectedMarkdownRelativePath = null;
+        markdownSelect.value = "";
+        selectWrap.classList.add("show");
+        convertBtn.disabled = true;
+
+        setSummary(
+          `<b>Modalità selezionata:</b> cartella progetto<br>` +
+          `<b>Cartella:</b> ${escapeHtml(rootFolder)}<br>` +
+          `<b>File trovati:</b> ${files.length}<br>` +
+          `<b>Markdown trovati:</b> ${markdownFiles.length}<br>` +
+          `<b>Scelta richiesta:</b> seleziona il file Markdown nel riquadro evidenziato qui sotto.`
+        );
+      }
     });
 
     markdownSelect.addEventListener("change", () => {
-      selectedMarkdownRelativePath = markdownSelect.value;
+      selectedMarkdownRelativePath = markdownSelect.value || null;
+      convertBtn.disabled = !selectedMarkdownRelativePath;
+
       const rootFolder = folderFiles[0]?.webkitRelativePath?.split("/")[0] || "(cartella)";
       setSummary(
         `<b>Modalità selezionata:</b> cartella progetto<br>` +
         `<b>Cartella:</b> ${escapeHtml(rootFolder)}<br>` +
         `<b>File trovati:</b> ${folderFiles.length}<br>` +
         `<b>Markdown trovati:</b> ${markdownFiles.length}<br>` +
-        `<b>Markdown selezionato:</b> ${escapeHtml(selectedMarkdownRelativePath)}`
+        `<b>Markdown selezionato:</b> ${escapeHtml(selectedMarkdownRelativePath || "nessuno")}`
       );
     });
 
@@ -902,6 +977,13 @@
     }
 
     convertBtn.addEventListener("click", async () => {
+      if (selectionMode === "folder" && markdownFiles.length > 1 && !selectedMarkdownRelativePath) {
+        setStatus("Seleziona prima il file Markdown da convertire.", "warn");
+        selectWrap.classList.add("show");
+        markdownSelect.focus();
+        return;
+      }
+
       const markdownFile = getCurrentMarkdownFile();
       if (!markdownFile) return;
 
