@@ -1,0 +1,967 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Convertitore Markdown (.md) in Word (.docx), eseguito direttamente nel browser, con supporto immagini.">
+  <title>Markdown → Word</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --text: #172033;
+      --muted: #667085;
+      --border: #d9deea;
+      --accent: #315efb;
+      --accent-hover: #244bd1;
+      --ok-bg: #ecfdf3;
+      --ok-text: #027a48;
+      --warn-bg: #fffaeb;
+      --warn-text: #b54708;
+      --err-bg: #fef3f2;
+      --err-text: #b42318;
+      --shadow: 0 14px 36px rgba(23,32,51,.10);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      padding: 28px 16px;
+    }
+
+    main { width: min(860px, 100%); }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      padding: clamp(22px, 4vw, 38px);
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(30px, 6vw, 48px);
+      line-height: 1.05;
+      letter-spacing: -.035em;
+    }
+
+    .lead {
+      margin: 16px 0 0;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.55;
+    }
+
+    .layout {
+      display: grid;
+      gap: 18px;
+      margin-top: 28px;
+    }
+
+    .choice-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px;
+      background: #fbfcff;
+    }
+
+    .panel h2 {
+      margin: 0 0 8px;
+      font-size: 18px;
+    }
+
+    .panel p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    button, .file-label, select {
+      appearance: none;
+      border: 0;
+      border-radius: 10px;
+      padding: 12px 18px;
+      font: inherit;
+      transition: .15s ease;
+    }
+
+    .file-label, .secondary-btn {
+      display: inline-block;
+      background: #eef2ff;
+      color: #2949b8;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    .file-label:hover, .secondary-btn:hover { background: #e3e9ff; }
+
+    #convertBtn {
+      background: var(--accent);
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+      min-width: 195px;
+      justify-self: start;
+    }
+
+    #convertBtn:hover:not(:disabled) { background: var(--accent-hover); }
+    #convertBtn:disabled { opacity: .45; cursor: not-allowed; }
+
+    input[type=file] { display: none; }
+
+    .summary {
+      border: 1px dashed #b8c2d8;
+      border-radius: 14px;
+      padding: 16px;
+      background: #fbfcff;
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.55;
+      min-height: 76px;
+    }
+
+    .summary b { color: var(--text); }
+
+    .select-wrap {
+      display: none;
+      margin-top: 10px;
+    }
+
+    .select-wrap.show { display: block; }
+
+    #markdownSelect {
+      width: 100%;
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .status {
+      display: none;
+      margin-top: 14px;
+      padding: 13px 15px;
+      border-radius: 10px;
+      line-height: 1.45;
+      font-size: 14px;
+      white-space: pre-wrap;
+    }
+
+    .status.show { display: block; }
+    .status.ok { background: var(--ok-bg); color: var(--ok-text); }
+    .status.warn { background: var(--warn-bg); color: var(--warn-text); }
+    .status.err { background: var(--err-bg); color: var(--err-text); }
+
+    .info {
+      margin-top: 24px;
+      padding-top: 22px;
+      border-top: 1px solid var(--border);
+      display: grid;
+      gap: 12px;
+    }
+
+    .info-row {
+      display: grid;
+      grid-template-columns: 24px 1fr;
+      gap: 10px;
+      align-items: start;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .info-row b { color: var(--text); }
+
+    footer {
+      margin-top: 16px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    @media (max-width: 700px) {
+      .choice-grid { grid-template-columns: 1fr; }
+      #convertBtn { width: 100%; }
+      .actions { flex-direction: column; }
+      .file-label, .secondary-btn { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card">
+      <p class="eyebrow">Convertitore locale nel browser</p>
+      <h1>Markdown → Word</h1>
+      <p class="lead">
+        Converte un file <b>.md</b> in un documento Word <b>.docx</b>. Le immagini referenziate nel Markdown possono essere incorporate nel Word.
+      </p>
+
+      <div class="layout">
+        <div class="choice-grid">
+          <div class="panel">
+            <h2>Opzione 1 — solo file Markdown</h2>
+            <p>Per documenti senza immagini locali. Funziona anche con immagini via URL, se il sito remoto consente il download dal browser.</p>
+            <div class="actions">
+              <label class="file-label" for="fileInput">Seleziona file .md</label>
+              <input id="fileInput" type="file" accept=".md,text/markdown,text/plain">
+            </div>
+          </div>
+
+          <div class="panel">
+            <h2>Opzione 2 — cartella progetto</h2>
+            <p><b>Consigliata se il Markdown contiene immagini locali</b>, per esempio <code>![img](images/foto.png)</code>. Seleziona la cartella che contiene il file `.md` e le immagini.</p>
+            <div class="actions">
+              <label class="file-label" for="folderInput">Seleziona cartella</label>
+              <input id="folderInput" type="file" webkitdirectory multiple>
+            </div>
+
+            <div id="selectWrap" class="select-wrap">
+              <div style="margin-bottom: 6px; font-size: 13px; color: var(--muted);">Se nella cartella ci sono più file Markdown, scegli quale convertire:</div>
+              <select id="markdownSelect"></select>
+            </div>
+          </div>
+        </div>
+
+        <div id="summary" class="summary">
+          Nessun file selezionato.
+        </div>
+
+        <button id="convertBtn" type="button" disabled>Converti in Word</button>
+        <div id="status" class="status" role="status" aria-live="polite"></div>
+
+        <div class="info">
+          <div class="info-row">
+            <div>🖼️</div>
+            <div><b>Immagini locali:</b> per incorporarle nel file Word, usa l'opzione <b>Seleziona cartella</b>, così la pagina può leggere sia il file Markdown sia i file immagine referenziati.</div>
+          </div>
+          <div class="info-row">
+            <div>🔒</div>
+            <div><b>Privacy:</b> il contenuto del file viene elaborato nel browser. Il documento non viene inviato a un nostro server.</div>
+          </div>
+          <div class="info-row">
+            <div>✓</div>
+            <div><b>Supporta:</b> titoli, paragrafi, grassetto, corsivo, barrato, link, elenchi, citazioni, tabelle, blocchi di codice e immagini PNG/JPG/GIF/BMP/WEBP referenziate nel Markdown.</div>
+          </div>
+          <div class="info-row">
+            <div>⚠️</div>
+            <div><b>Nota:</b> per immagini remote via URL, il sito sorgente deve consentire il download dal browser; altrimenti il documento Word verrà generato senza quell'immagine e con un avviso.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Nessuna installazione richiesta. Richiede una connessione Internet per caricare le librerie JavaScript della pagina.
+    </footer>
+  </main>
+
+  <script type="module">
+    import markdownit from "https://cdn.jsdelivr.net/npm/markdown-it@15.0.2/+esm";
+    import * as docx from "https://cdn.jsdelivr.net/npm/docx@9.8.1/+esm";
+
+    const {
+      Document, Packer, Paragraph, TextRun, HeadingLevel, ExternalHyperlink,
+      Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType, ImageRun
+    } = docx;
+
+    const md = markdownit({
+      html: false,
+      linkify: true,
+      breaks: false,
+      typographer: false
+    });
+
+    const fileInput = document.getElementById("fileInput");
+    const folderInput = document.getElementById("folderInput");
+    const markdownSelect = document.getElementById("markdownSelect");
+    const selectWrap = document.getElementById("selectWrap");
+    const convertBtn = document.getElementById("convertBtn");
+    const summary = document.getElementById("summary");
+    const status = document.getElementById("status");
+
+    let selectionMode = null;   // "single" | "folder"
+    let singleMarkdownFile = null;
+    let folderFiles = [];
+    let markdownFiles = [];
+    let selectedMarkdownRelativePath = null;
+
+    function setStatus(message, kind = "ok") {
+      status.className = `status show ${kind}`;
+      status.textContent = message;
+    }
+
+    function clearStatus() {
+      status.className = "status";
+      status.textContent = "";
+    }
+
+    function isMarkdownFile(file) {
+      return file && (/\.md$/i.test(file.name) || file.type === "text/markdown");
+    }
+
+    function normalizePath(input) {
+      const raw = String(input || "").replace(/\\/g, "/");
+      const parts = raw.split("/");
+      const out = [];
+      for (const part of parts) {
+        if (!part || part === ".") continue;
+        if (part === "..") {
+          if (out.length) out.pop();
+          continue;
+        }
+        out.push(part);
+      }
+      return out.join("/");
+    }
+
+    function dirname(path) {
+      const p = normalizePath(path);
+      const idx = p.lastIndexOf("/");
+      return idx >= 0 ? p.slice(0, idx) : "";
+    }
+
+    function joinPath(base, rel) {
+      if (!base) return normalizePath(rel);
+      return normalizePath(base + "/" + rel);
+    }
+
+    function setSummary(html) {
+      summary.innerHTML = html;
+    }
+
+    function resetSelection() {
+      singleMarkdownFile = null;
+      folderFiles = [];
+      markdownFiles = [];
+      selectedMarkdownRelativePath = null;
+      markdownSelect.innerHTML = "";
+      selectWrap.classList.remove("show");
+      convertBtn.disabled = true;
+    }
+
+    fileInput.addEventListener("change", () => {
+      clearStatus();
+      resetSelection();
+      const file = fileInput.files?.[0];
+      if (!isMarkdownFile(file)) {
+        selectionMode = null;
+        setSummary("Nessun file selezionato.");
+        if (file) setStatus("Seleziona un file con estensione .md.", "err");
+        return;
+      }
+      selectionMode = "single";
+      singleMarkdownFile = file;
+      convertBtn.disabled = false;
+      setSummary(`<b>Modalità selezionata:</b> solo file Markdown<br><b>File:</b> ${escapeHtml(file.name)}`);
+    });
+
+    folderInput.addEventListener("change", () => {
+      clearStatus();
+      resetSelection();
+      const files = Array.from(folderInput.files || []);
+      selectionMode = "folder";
+      folderFiles = files;
+
+      markdownFiles = files
+        .filter(isMarkdownFile)
+        .map(f => ({
+          file: f,
+          relPath: normalizePath(f.webkitRelativePath || f.name)
+        }))
+        .sort((a, b) => a.relPath.localeCompare(b.relPath, "it"));
+
+      if (!markdownFiles.length) {
+        selectionMode = null;
+        setSummary("Nessuna cartella valida selezionata.");
+        setStatus("La cartella non contiene nessun file .md.", "err");
+        return;
+      }
+
+      for (const item of markdownFiles) {
+        const opt = document.createElement("option");
+        opt.value = item.relPath;
+        opt.textContent = item.relPath;
+        markdownSelect.appendChild(opt);
+      }
+
+      selectedMarkdownRelativePath = markdownFiles[0].relPath;
+      if (markdownFiles.length > 1) {
+        selectWrap.classList.add("show");
+      }
+
+      convertBtn.disabled = false;
+
+      const rootFolder = files[0]?.webkitRelativePath?.split("/")[0] || "(cartella)";
+      setSummary(
+        `<b>Modalità selezionata:</b> cartella progetto<br>` +
+        `<b>Cartella:</b> ${escapeHtml(rootFolder)}<br>` +
+        `<b>File trovati:</b> ${files.length}<br>` +
+        `<b>Markdown trovati:</b> ${markdownFiles.length}<br>` +
+        `<b>Markdown selezionato:</b> ${escapeHtml(selectedMarkdownRelativePath)}`
+      );
+    });
+
+    markdownSelect.addEventListener("change", () => {
+      selectedMarkdownRelativePath = markdownSelect.value;
+      const rootFolder = folderFiles[0]?.webkitRelativePath?.split("/")[0] || "(cartella)";
+      setSummary(
+        `<b>Modalità selezionata:</b> cartella progetto<br>` +
+        `<b>Cartella:</b> ${escapeHtml(rootFolder)}<br>` +
+        `<b>File trovati:</b> ${folderFiles.length}<br>` +
+        `<b>Markdown trovati:</b> ${markdownFiles.length}<br>` +
+        `<b>Markdown selezionato:</b> ${escapeHtml(selectedMarkdownRelativePath)}`
+      );
+    });
+
+    function escapeHtml(s) {
+      return String(s)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function getCurrentMarkdownFile() {
+      if (selectionMode === "single") return singleMarkdownFile;
+      if (selectionMode === "folder") {
+        const hit = markdownFiles.find(x => x.relPath === selectedMarkdownRelativePath);
+        return hit?.file || null;
+      }
+      return null;
+    }
+
+    function buildContext() {
+      const warnings = [];
+      if (selectionMode === "single") {
+        return {
+          mode: "single",
+          markdownFile: singleMarkdownFile,
+          markdownPath: singleMarkdownFile?.name || "",
+          markdownBaseDir: "",
+          folderMap: new Map(),
+          warnings
+        };
+      }
+
+      const map = new Map();
+      for (const f of folderFiles) {
+        const rel = normalizePath(f.webkitRelativePath || f.name);
+        // Rimuove il primo segmento radice della cartella scelta
+        const noRoot = normalizePath(rel.split("/").slice(1).join("/"));
+        map.set(noRoot, f);
+      }
+
+      const mdRel = normalizePath((selectedMarkdownRelativePath || "").split("/").slice(1).join("/"));
+      const mdFile = getCurrentMarkdownFile();
+
+      return {
+        mode: "folder",
+        markdownFile: mdFile,
+        markdownPath: mdRel,
+        markdownBaseDir: dirname(mdRel),
+        folderMap: map,
+        warnings
+      };
+    }
+
+    function runFromText(text, style = {}) {
+      return new TextRun({
+        text,
+        bold: !!style.bold,
+        italics: !!style.italics,
+        strike: !!style.strike,
+        font: style.code ? "Consolas" : undefined,
+        size: style.code ? 20 : undefined,
+        shading: style.code ? { type: ShadingType.CLEAR, fill: "F2F4F7" } : undefined
+      });
+    }
+
+    async function loadImageMetaFromBlob(blob) {
+      const url = URL.createObjectURL(blob);
+      try {
+        const img = await new Promise((resolve, reject) => {
+          const el = new Image();
+          el.onload = () => resolve(el);
+          el.onerror = () => reject(new Error("Impossibile leggere l'immagine."));
+          el.src = url;
+        });
+        return { width: img.naturalWidth || 600, height: img.naturalHeight || 400 };
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    }
+
+    function detectImageKind(src, mime = "") {
+      const lowSrc = (src || "").toLowerCase();
+      const lowMime = (mime || "").toLowerCase();
+
+      if (lowMime.includes("png") || lowSrc.endsWith(".png")) return "png";
+      if (lowMime.includes("jpeg") || lowMime.includes("jpg") || lowSrc.endsWith(".jpg") || lowSrc.endsWith(".jpeg")) return "jpg";
+      if (lowMime.includes("gif") || lowSrc.endsWith(".gif")) return "gif";
+      if (lowMime.includes("bmp") || lowSrc.endsWith(".bmp")) return "bmp";
+      if (lowMime.includes("webp") || lowSrc.endsWith(".webp")) return "webp";
+      return null;
+    }
+
+    async function fetchImageResource(src, ctx) {
+      const cleanSrc = String(src || "").trim();
+      if (!cleanSrc) return null;
+
+      // Data URL
+      if (cleanSrc.startsWith("data:")) {
+        const res = await fetch(cleanSrc);
+        const blob = await res.blob();
+        const kind = detectImageKind("", blob.type);
+        if (!kind) {
+          ctx.warnings.push(`Immagine non supportata: ${cleanSrc.slice(0, 40)}...`);
+          return null;
+        }
+        return { blob, arrayBuffer: await blob.arrayBuffer(), kind };
+      }
+
+      // URL remota
+      if (/^https?:\/\//i.test(cleanSrc)) {
+        try {
+          const res = await fetch(cleanSrc);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const blob = await res.blob();
+          const kind = detectImageKind(cleanSrc, blob.type);
+          if (!kind) {
+            ctx.warnings.push(`Formato immagine remoto non supportato: ${cleanSrc}`);
+            return null;
+          }
+          return { blob, arrayBuffer: await blob.arrayBuffer(), kind };
+        } catch (err) {
+          ctx.warnings.push(`Immagine remota non scaricabile: ${cleanSrc}`);
+          return null;
+        }
+      }
+
+      // File locale referenziato nel markdown
+      if (ctx.mode !== "folder") {
+        ctx.warnings.push(`Immagine locale non incorporata: ${cleanSrc}. Per includerla, usa "Seleziona cartella".`);
+        return null;
+      }
+
+      const withoutQuery = cleanSrc.split("#")[0].split("?")[0];
+      const resolved = joinPath(ctx.markdownBaseDir, withoutQuery);
+      const file = ctx.folderMap.get(resolved) || ctx.folderMap.get(normalizePath(decodeURIComponent(resolved)));
+
+      if (!file) {
+        ctx.warnings.push(`Immagine locale non trovata: ${cleanSrc}`);
+        return null;
+      }
+
+      const kind = detectImageKind(file.name, file.type);
+      if (!kind) {
+        ctx.warnings.push(`Formato immagine locale non supportato: ${cleanSrc}`);
+        return null;
+      }
+
+      const blob = file;
+      return { blob, arrayBuffer: await file.arrayBuffer(), kind };
+    }
+
+    async function createImageRunFromSrc(src, altText, ctx) {
+      const resource = await fetchImageResource(src, ctx);
+      if (!resource) {
+        return runFromText(`[Immagine non disponibile: ${altText || src}]`, { italics: true });
+      }
+
+      try {
+        const meta = await loadImageMetaFromBlob(resource.blob);
+        const maxWidth = 520;
+        const width = Math.max(1, meta.width);
+        const height = Math.max(1, meta.height);
+        const ratio = Math.min(1, maxWidth / width);
+        const finalWidth = Math.round(width * ratio);
+        const finalHeight = Math.round(height * ratio);
+
+        return new ImageRun({
+          type: resource.kind,
+          data: resource.arrayBuffer,
+          transformation: {
+            width: finalWidth,
+            height: finalHeight
+          }
+        });
+      } catch (err) {
+        ctx.warnings.push(`Impossibile leggere le dimensioni dell'immagine: ${src}`);
+        return runFromText(`[Immagine non disponibile: ${altText || src}]`, { italics: true });
+      }
+    }
+
+    async function inlineChildren(node, ctx, style = {}) {
+      const out = [];
+
+      for (const child of node.childNodes) {
+        if (child.nodeType === Node.TEXT_NODE) {
+          if (child.nodeValue) out.push(runFromText(child.nodeValue, style));
+          continue;
+        }
+
+        if (child.nodeType !== Node.ELEMENT_NODE) continue;
+
+        const tag = child.tagName.toLowerCase();
+        const nextStyle = { ...style };
+
+        if (tag === "strong" || tag === "b") nextStyle.bold = true;
+        if (tag === "em" || tag === "i") nextStyle.italics = true;
+        if (tag === "s" || tag === "del") nextStyle.strike = true;
+        if (tag === "code") nextStyle.code = true;
+
+        if (tag === "br") {
+          out.push(new TextRun({ text: "", break: 1 }));
+        } else if (tag === "a") {
+          const href = child.getAttribute("href") || "";
+          const linkText = child.textContent || href;
+          if (/^https?:\/\//i.test(href) || /^mailto:/i.test(href)) {
+            out.push(new ExternalHyperlink({
+              link: href,
+              children: [new TextRun({
+                text: linkText,
+                style: "Hyperlink",
+                bold: !!nextStyle.bold,
+                italics: !!nextStyle.italics
+              })]
+            }));
+          } else {
+            out.push(runFromText(linkText, nextStyle));
+          }
+        } else if (tag === "img") {
+          const imgRun = await createImageRunFromSrc(
+            child.getAttribute("src") || "",
+            child.getAttribute("alt") || "immagine",
+            ctx
+          );
+          out.push(imgRun);
+        } else {
+          out.push(...await inlineChildren(child, ctx, nextStyle));
+        }
+      }
+
+      return out.length ? out : [new TextRun("")];
+    }
+
+    async function paragraphFromElement(el, ctx, options = {}) {
+      return new Paragraph({
+        ...options,
+        children: await inlineChildren(el, ctx)
+      });
+    }
+
+    function headingLevel(tag) {
+      return {
+        h1: HeadingLevel.HEADING_1,
+        h2: HeadingLevel.HEADING_2,
+        h3: HeadingLevel.HEADING_3,
+        h4: HeadingLevel.HEADING_4,
+        h5: HeadingLevel.HEADING_5,
+        h6: HeadingLevel.HEADING_6
+      }[tag];
+    }
+
+    function codeParagraphs(pre) {
+      const text = (pre.textContent || "").replace(/\n$/, "");
+      const lines = text.split("\n");
+      return lines.map(line => new Paragraph({
+        spacing: { before: 0, after: 0, line: 280 },
+        shading: { type: ShadingType.CLEAR, fill: "F5F7FA" },
+        indent: { left: 240, right: 240 },
+        children: [new TextRun({ text: line || " ", font: "Consolas", size: 19 })]
+      }));
+    }
+
+    function listItemContent(li) {
+      const holder = document.createElement("span");
+      for (const child of li.childNodes) {
+        if (child.nodeType === Node.ELEMENT_NODE && ["ul", "ol"].includes(child.tagName.toLowerCase())) {
+          continue;
+        }
+        if (child.nodeType === Node.ELEMENT_NODE && child.tagName.toLowerCase() === "p") {
+          for (const sub of child.childNodes) holder.append(sub.cloneNode(true));
+        } else {
+          holder.append(child.cloneNode(true));
+        }
+      }
+      return holder;
+    }
+
+    async function processList(list, ctx, level = 0) {
+      const out = [];
+      const ordered = list.tagName.toLowerCase() === "ol";
+      let number = parseInt(list.getAttribute("start") || "1", 10);
+
+      for (const li of Array.from(list.children).filter(x => x.tagName?.toLowerCase() === "li")) {
+        const content = listItemContent(li);
+        const prefix = ordered ? `${number}. ` : "• ";
+        const children = [new TextRun({ text: prefix }), ...(await inlineChildren(content, ctx))];
+
+        out.push(new Paragraph({
+          indent: { left: 360 + level * 360, hanging: 260 },
+          spacing: { after: 80 },
+          children
+        }));
+
+        for (const nested of Array.from(li.children).filter(x =>
+          ["ul", "ol"].includes(x.tagName.toLowerCase())
+        )) {
+          out.push(...await processList(nested, ctx, level + 1));
+        }
+        number++;
+      }
+      return out;
+    }
+
+    async function processBlockquote(block, ctx) {
+      const out = [];
+      for (const child of Array.from(block.children)) {
+        if (child.tagName.toLowerCase() === "p") {
+          out.push(new Paragraph({
+            indent: { left: 480 },
+            border: {
+              left: { color: "AAB4C8", size: 16, style: BorderStyle.SINGLE, space: 10 }
+            },
+            spacing: { after: 120 },
+            children: await inlineChildren(child, ctx, { italics: true })
+          }));
+        } else {
+          out.push(...await processElement(child, ctx));
+        }
+      }
+      return out;
+    }
+
+    async function cellParagraphs(cell, ctx) {
+      const children = [];
+      for (const n of Array.from(cell.children)) {
+        if (n.tagName.toLowerCase() === "p") children.push(await paragraphFromElement(n, ctx));
+        else children.push(...await processElement(n, ctx));
+      }
+      if (!children.length) {
+        children.push(new Paragraph({ children: await inlineChildren(cell, ctx) }));
+      }
+      return children;
+    }
+
+    async function processTable(tableEl, ctx) {
+      const rows = [];
+      const trNodes = tableEl.querySelectorAll(":scope > thead > tr, :scope > tbody > tr, :scope > tr");
+
+      for (const tr of trNodes) {
+        const cells = Array.from(tr.children).filter(x => ["th", "td"].includes(x.tagName.toLowerCase()));
+        const docCells = [];
+
+        for (const cell of cells) {
+          const contentParagraphs = await cellParagraphs(cell, ctx);
+          const docChildren = [];
+          if (cell.tagName.toLowerCase() === "th") {
+            const text = cell.textContent || "";
+            docChildren.push(new Paragraph({
+              children: [new TextRun({ text, bold: true })]
+            }));
+          } else {
+            docChildren.push(...contentParagraphs);
+          }
+
+          docCells.push(new TableCell({
+            width: {
+              size: Math.max(1, Math.floor(100 / Math.max(cells.length, 1))),
+              type: WidthType.PERCENTAGE
+            },
+            shading: cell.tagName.toLowerCase() === "th"
+              ? { type: ShadingType.CLEAR, fill: "E9EEF8" }
+              : undefined,
+            children: docChildren
+          }));
+        }
+
+        rows.push(new TableRow({ children: docCells }));
+      }
+
+      if (!rows.length) {
+        return [new Paragraph({ text: "[Tabella vuota]" })];
+      }
+
+      return [new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows
+      }), new Paragraph({ text: "" })];
+    }
+
+    async function processElement(el, ctx) {
+      const tag = el.tagName?.toLowerCase();
+      if (!tag) return [];
+
+      if (/^h[1-6]$/.test(tag)) {
+        return [await paragraphFromElement(el, ctx, {
+          heading: headingLevel(tag),
+          spacing: { before: 220, after: 100 }
+        })];
+      }
+
+      if (tag === "p") {
+        // Caso speciale: paragrafo contenente soltanto un'immagine
+        const elementChildren = Array.from(el.childNodes).filter(n => {
+          return !(n.nodeType === Node.TEXT_NODE && !n.nodeValue.trim());
+        });
+
+        if (elementChildren.length === 1 &&
+            elementChildren[0].nodeType === Node.ELEMENT_NODE &&
+            elementChildren[0].tagName.toLowerCase() === "img") {
+          const img = elementChildren[0];
+          const imgRun = await createImageRunFromSrc(
+            img.getAttribute("src") || "",
+            img.getAttribute("alt") || "immagine",
+            ctx
+          );
+          return [new Paragraph({
+            alignment: "center",
+            spacing: { after: 140 },
+            children: [imgRun]
+          })];
+        }
+
+        return [await paragraphFromElement(el, ctx, { spacing: { after: 140 } })];
+      }
+
+      if (tag === "ul" || tag === "ol") return await processList(el, ctx);
+      if (tag === "pre") return codeParagraphs(el);
+      if (tag === "blockquote") return await processBlockquote(el, ctx);
+      if (tag === "table") return await processTable(el, ctx);
+
+      if (tag === "hr") {
+        return [new Paragraph({
+          border: {
+            bottom: { color: "B8C2D8", size: 8, style: BorderStyle.SINGLE, space: 8 }
+          },
+          spacing: { before: 100, after: 160 }
+        })];
+      }
+
+      return [await paragraphFromElement(el, ctx, { spacing: { after: 120 } })];
+    }
+
+    async function htmlToDocxBlocks(html, ctx) {
+      const parsed = new DOMParser().parseFromString(`<main>${html}</main>`, "text/html");
+      const main = parsed.querySelector("main");
+      const blocks = [];
+
+      for (const el of Array.from(main.children)) {
+        blocks.push(...await processElement(el, ctx));
+      }
+
+      if (!blocks.length) {
+        blocks.push(new Paragraph({ text: "" }));
+      }
+      return blocks;
+    }
+
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    }
+
+    convertBtn.addEventListener("click", async () => {
+      const markdownFile = getCurrentMarkdownFile();
+      if (!markdownFile) return;
+
+      convertBtn.disabled = true;
+      convertBtn.textContent = "Conversione...";
+      clearStatus();
+
+      try {
+        const ctx = buildContext();
+        const markdown = await markdownFile.text();
+        const html = md.render(markdown);
+        const children = await htmlToDocxBlocks(html, ctx);
+
+        const wordDoc = new Document({
+          creator: "Markdown → Word",
+          title: markdownFile.name.replace(/\.md$/i, ""),
+          description: "Documento generato localmente nel browser da un file Markdown.",
+          styles: {
+            default: {
+              document: {
+                run: { font: "Aptos", size: 22 },
+                paragraph: { spacing: { line: 276 } }
+              }
+            }
+          },
+          sections: [{
+            properties: {
+              page: {
+                margin: { top: 1134, right: 1134, bottom: 1134, left: 1134 }
+              }
+            },
+            children
+          }]
+        });
+
+        const blob = await Packer.toBlob(wordDoc);
+        const outName = markdownFile.name.replace(/\.md$/i, "") + ".docx";
+        downloadBlob(blob, outName);
+
+        if (ctx.warnings.length) {
+          const first = ctx.warnings.slice(0, 6).map(x => "• " + x).join("\n");
+          const more = ctx.warnings.length > 6 ? `\n• ...e altri ${ctx.warnings.length - 6} avvisi` : "";
+          setStatus(
+            `Documento creato: ${outName}\n\nSono presenti alcuni avvisi:\n${first}${more}`,
+            "warn"
+          );
+        } else {
+          setStatus(`Documento creato correttamente: ${outName}`, "ok");
+        }
+      } catch (err) {
+        console.error(err);
+        setStatus(
+          "La conversione non è riuscita. Verifica il file Markdown e, se usi immagini locali, assicurati di aver selezionato la cartella progetto corretta.",
+          "err"
+        );
+      } finally {
+        convertBtn.disabled = false;
+        convertBtn.textContent = "Converti in Word";
+      }
+    });
+  </script>
+</body>
+</html>
